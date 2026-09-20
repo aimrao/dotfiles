@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AI_DIR="$HOME/AI"
+MODELS_DIR="$AI_DIR/models"
+LLAMA_SERVER="$HOME/.local/bin/llama-server"
+WEBUI_CONTAINER="local-ai-webui"
+
+LLAMA_PORT=8081
+WEBUI_PORT=3000
+
+echo "==> Checking models directory..."
+if [[ ! -d "$MODELS_DIR" ]]; then
+    echo "ERROR: Models directory not found:"
+    echo "  $MODELS_DIR"
+    exit 1
+fi
+
+if ! compgen -G "$MODELS_DIR/*.gguf" >/dev/null; then
+    echo "ERROR: No GGUF models found in:"
+    echo "  $MODELS_DIR"
+    exit 1
+fi
+
+echo "==> Models available:"
+find "$MODELS_DIR" -maxdepth 1 -type f -name '*.gguf' -printf '    %f\n'
+
+echo "==> Checking llama-server..."
+if [[ ! -x "$LLAMA_SERVER" ]]; then
+    echo "ERROR: llama-server not found:"
+    echo "  $LLAMA_SERVER"
+    exit 1
+fi
+
+echo "==> Starting llama-server router..."
+
+if ! pgrep -f "llama-server.*--models-dir" >/dev/null; then
+    nohup "$LLAMA_SERVER" \
+        --models-dir "$MODELS_DIR" \
+        --models-max 1 \
+        --host 0.0.0.0 \
+        --port "$LLAMA_PORT" \
+        -ngl 99 \
+        -c 32768 \
+        >"$AI_DIR/llama-server.log" 2>&1 &
+
+    echo $! >"$AI_DIR/llama-server.pid"
+else
+    echo "    llama-server router already running."
+fi
+
+echo "==> Waiting for llama-server..."
+
+for i in {1..120}; do
+    if curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" >/dev/null; then
+        echo "    llama-server router ready."
+        break
+    fi
+
+    if [[ "$i" -eq 120 ]]; then
+        echo "ERROR: llama-server failed to start."
+        echo
+        tail -50 "$AI_DIR/llama-server.log"
+        exit 1
+    fi
+
+    sleep 1
+done
+
+echo "==> Available models from llama-server:"
+curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[].id' 2>/dev/null || true
+
+echo "==> Starting Open WebUI..."
+
+if podman container exists "$WEBUI_CONTAINER" 2>/dev/null; then
+    podman start "$WEBUI_CONTAINER" >/dev/null
+else
+    podman run -d \
+        --name "$WEBUI_CONTAINER" \
+        --restart=no \
+        --network host \
+        -v open-webui:/app/backend/data \
+        -e WEBUI_AUTH=true \
+        -e ENABLE_OLLAMA_API=false \
+        -e OPENAI_API_BASE_URL="http://127.0.0.1:${LLAMA_PORT}/v1" \
+        -e OPENAI_API_KEY=local-ai \
+        ghcr.io/open-webui/open-webui:main
+fi
+
+echo "==> Waiting for Open WebUI..."
+
+for i in {1..60}; do
+    if curl -sf "http://127.0.0.1:${WEBUI_PORT}" >/dev/null; then
+        echo
+        echo "========================================"
+        echo " Local AI is ready"
+        echo " Open WebUI: http://127.0.0.1:${WEBUI_PORT}"
+        echo " Models:     $MODELS_DIR"
+        echo " Context:    32768"
+        echo " Max loaded: 1 model"
+        echo "========================================"
+        exit 0
+    fi
+
+    sleep 1
+done
+
+echo "WARNING: Open WebUI is taking longer than expected."
+echo "Try opening: http://127.0.0.1:${WEBUI_PORT}"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Dolby Digital 5.1 ALSA A52 sink
+After=pipewire.service pipewire-pulse.service wireplumber.service
+Wants=pipewire.service pipewire-pulse.service wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/dolby51-pipewire.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

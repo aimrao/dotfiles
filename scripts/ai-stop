@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AI_DIR="$HOME/AI"
+WEBUI_CONTAINER="local-ai-webui"
+
+echo "==> Stopping Open WebUI..."
+
+if podman container exists "$WEBUI_CONTAINER" 2>/dev/null; then
+    podman stop "$WEBUI_CONTAINER" >/dev/null || true
+fi
+
+echo "==> Stopping llama-server..."
+
+if [[ -f "$AI_DIR/llama-server.pid" ]]; then
+    PID="$(cat "$AI_DIR/llama-server.pid")"
+
+    if kill -0 "$PID" 2>/dev/null; then
+        kill "$PID"
+
+        for i in {1..30}; do
+            if ! kill -0 "$PID" 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
+    rm -f "$AI_DIR/llama-server.pid"
+fi
+
+# Safety net in case the PID file was stale.
+pkill -f "llama-server.*Qwen3.6-35B-A3B-Q4_K_M.gguf" 2>/dev/null || true
+
+echo
+echo "========================================"
+echo " Local AI stopped"
+echo " VRAM should now be released"
+echo "========================================"

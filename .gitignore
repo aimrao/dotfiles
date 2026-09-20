@@ -1,0 +1,44 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+secret*
+
+# SSH
+.ssh/
+id_rsa
+id_ed25519
+*.pub
+
+# Shell history
+.zsh_history
+.bash_history
+.python_history
+
+# Runtime/cache
+.cache/
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Neovim
+nvim/plugin/
+nvim/.netrwhist
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.directory
+
+# AI/model data
+*.gguf
+*.safetensors
+*.bin
+models/
+AI/

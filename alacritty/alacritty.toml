@@ -1,0 +1,92 @@
+# ============================================================
+# ALACRITTY
+# ============================================================
+
+[window]
+
+# Subtle OLED-friendly transparency
+opacity = 0.88
+
+# KDE compositor blur
+blur = true
+
+# Start maximized
+startup_mode = "Maximized"
+
+# Comfortable padding
+padding = { x = 10, y = 8 }
+dynamic_padding = true
+
+[font]
+size = 12.5
+
+[font.normal]
+family = "JetBrainsMono Nerd Font"
+style = "Regular"
+
+[font.bold]
+family = "JetBrainsMono Nerd Font"
+style = "Bold"
+
+[font.italic]
+family = "JetBrainsMono Nerd Font"
+style = "Italic"
+
+[cursor]
+
+style = { shape = "Beam", blinking = "On" }
+blink_interval = 500
+
+[scrolling]
+
+history = 100000
+multiplier = 3
+
+[selection]
+
+save_to_clipboard = true
+
+[terminal]
+
+shell = { program = "/usr/bin/zsh" }
+
+# ------------------------------------------------------------
+# Dark theme
+# ------------------------------------------------------------
+
+[colors.primary]
+
+background = "#0b0f14"
+foreground = "#d8dee9"
+
+[colors.cursor]
+
+text = "#0b0f14"
+cursor = "#d8dee9"
+
+[colors.selection]
+
+text = "#d8dee9"
+background = "#303846"
+
+[colors.normal]
+
+black = "#1b2028"
+red = "#bf616a"
+green = "#a3be8c"
+yellow = "#ebcb8b"
+blue = "#81a1c1"
+magenta = "#b48ead"
+cyan = "#88c0d0"
+white = "#d8dee9"
+
+[colors.bright]
+
+black = "#4c566a"
+red = "#d08770"
+green = "#a3be8c"
+yellow = "#ebcb8b"
+blue = "#81a1c1"
+magenta = "#b48ead"
+cyan = "#8fbcbb"
+white = "#eceff4"
