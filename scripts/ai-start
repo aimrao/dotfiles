@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
+DOTFILES="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
 AI_DIR="$HOME/AI"
 MODELS_DIR="$AI_DIR/models"
 LLAMA_SERVER="$HOME/.local/bin/llama-server"
@@ -46,6 +50,9 @@ if ! pgrep -f "llama-server.*--models-dir" >/dev/null; then
         --load-mode none \
         -ub 2048 \
         -c 32768 \
+        --metrics \
+        --jinja \
+        --chat-template-file "$DOTFILES/llama/templates/qwen3.6-35b-a3b-claude-code.jinja" \
         >"$AI_DIR/llama-server.log" 2>&1 &
 
     echo $! >"$AI_DIR/llama-server.pid"

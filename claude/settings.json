@@ -1,0 +1,13 @@
+{
+  "modelPicker": {
+    "options": [
+      {
+        "model": "Qwen3.6-35B-A3B-Q4_K_M",
+        "label": "Local Qwen 3.6",
+        "description": "Qwen3.6-35B-A3B via local llama.cpp",
+        "behavesAs": "claude-opus-5-5"
+      }
+    ]
+  },
+  "theme": "dark"
+}
