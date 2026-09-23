@@ -256,3 +256,4 @@ fi
 # ------------------------------------------------------------
 
 source "$HOME/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+export PATH="$HOME/.local/bin:$PATH"
