@@ -2,14 +2,55 @@
 
 set -euo pipefail
 
-DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# -------------------------------------------------------------------
+# Paths
+# -------------------------------------------------------------------
+
+# bootstrap/fedora.sh -> bootstrap/ -> dotfiles/
+DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+
+# Make user-installed commands available during this script.
+export PATH="$HOME/.local/bin:$PATH"
+
+# -------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------
 
 log() {
     printf '\n\033[1;36m==> %s\033[0m\n' "$1"
 }
 
-run_as_user() {
-    sudo -u "$USER" "$@"
+link_from_dotfiles() {
+    local source="$1"
+    local target="$2"
+
+    if [[ ! -e "$source" ]]; then
+        echo "Missing dotfiles source: $source"
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$target")"
+
+    if [[ -L "$target" ]]; then
+        local current
+        current="$(readlink "$target")"
+
+        if [[ "$current" == "$source" ]]; then
+            echo "OK      $target"
+            return
+        fi
+
+        rm -f "$target"
+
+    elif [[ -e "$target" ]]; then
+        local backup
+        backup="${target}.backup.$(date +%Y%m%d-%H%M%S)"
+        echo "BACKUP  $target -> $backup"
+        mv "$target" "$backup"
+    fi
+
+    ln -s "$source" "$target"
+    echo "LINK    $target -> $source"
 }
 
 # -------------------------------------------------------------------
@@ -43,12 +84,12 @@ log "Installing RPM Fusion"
 
 if ! rpm -q rpmfusion-free-release >/dev/null 2>&1; then
     sudo dnf install -y \
-        https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+        "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm"
 fi
 
 if ! rpm -q rpmfusion-nonfree-release >/dev/null 2>&1; then
     sudo dnf install -y \
-        https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+        "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 fi
 
 sudo dnf makecache
@@ -115,10 +156,10 @@ sudo dnf install -y \
     git-lfs
 
 # -------------------------------------------------------------------
-# AMD / Vulkan
+# AMD / Vulkan / OpenCL
 # -------------------------------------------------------------------
 
-log "Installing AMD/Vulkan userspace and development packages"
+log "Installing AMD / Vulkan / OpenCL userspace"
 
 sudo dnf install -y \
     mesa-dri-drivers \
@@ -127,7 +168,10 @@ sudo dnf install -y \
     vulkan-loader-devel \
     vulkan-tools \
     vulkan-headers \
-    glslc
+    glslc \
+    libxcrypt-compat \
+    rocm-opencl \
+    rocm-clinfo
 
 # -------------------------------------------------------------------
 # Multimedia
@@ -217,7 +261,9 @@ if ! fc-list | grep -qi "JetBrainsMono Nerd Font"; then
         -o "$TMP_DIR/JetBrainsMono.zip" \
         https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
 
-    unzip -qo "$TMP_DIR/JetBrainsMono.zip" -d "$FONT_DIR"
+    unzip -qo \
+        "$TMP_DIR/JetBrainsMono.zip" \
+        -d "$FONT_DIR"
 
     rm -rf "$TMP_DIR"
 
@@ -225,7 +271,7 @@ if ! fc-list | grep -qi "JetBrainsMono Nerd Font"; then
 fi
 
 # -------------------------------------------------------------------
-# SSH directory
+# SSH
 # -------------------------------------------------------------------
 
 log "Preparing SSH"
@@ -234,7 +280,7 @@ mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
 # -------------------------------------------------------------------
-# Local AI source tree
+# Local AI workspace
 # -------------------------------------------------------------------
 
 log "Preparing local AI workspace"
@@ -242,6 +288,7 @@ log "Preparing local AI workspace"
 mkdir -p "$HOME/AI/models"
 mkdir -p "$HOME/AI/bin"
 mkdir -p "$HOME/src"
+mkdir -p "$HOME/.local/bin"
 
 # -------------------------------------------------------------------
 # llama.cpp
@@ -252,7 +299,9 @@ log "Installing/building llama.cpp"
 LLAMA_DIR="$HOME/src/llama.cpp"
 
 if [[ ! -d "$LLAMA_DIR/.git" ]]; then
-    git clone https://github.com/ggml-org/llama.cpp.git "$LLAMA_DIR"
+    git clone \
+        https://github.com/ggml-org/llama.cpp.git \
+        "$LLAMA_DIR"
 else
     git -C "$LLAMA_DIR" pull --ff-only
 fi
@@ -266,14 +315,6 @@ cmake --build "$LLAMA_DIR/build" \
     --target llama-cli llama-server llama-bench \
     -j"$(nproc)"
 
-# -------------------------------------------------------------------
-# llama.cpp convenience symlinks
-# -------------------------------------------------------------------
-
-log "Installing llama.cpp convenience commands"
-
-mkdir -p "$HOME/.local/bin"
-
 ln -sfn \
     "$LLAMA_DIR/build/bin/llama-cli" \
     "$HOME/.local/bin/llama-cli"
@@ -285,6 +326,23 @@ ln -sfn \
 ln -sfn \
     "$LLAMA_DIR/build/bin/llama-bench" \
     "$HOME/.local/bin/llama-bench"
+
+# -------------------------------------------------------------------
+# Claude Code
+# -------------------------------------------------------------------
+
+log "Installing Claude Code"
+
+if ! command -v claude >/dev/null 2>&1; then
+    curl -fsSL https://claude.ai/install.sh | bash
+fi
+
+hash -r
+
+if ! command -v claude >/dev/null 2>&1; then
+    echo "Claude Code installation failed."
+    exit 1
+fi
 
 # -------------------------------------------------------------------
 # Default shell
@@ -316,18 +374,99 @@ git lfs install
 
 log "Installing dotfiles"
 
-"$DOTFILES/install.sh"
+# Shell
+link_from_dotfiles \
+    "$DOTFILES/zsh/.zshrc" \
+    "$HOME/.zshrc"
+
+link_from_dotfiles \
+    "$DOTFILES/tmux/.tmux.conf" \
+    "$HOME/.tmux.conf"
+
+# Terminal
+link_from_dotfiles \
+    "$DOTFILES/starship/starship.toml" \
+    "$HOME/.config/starship.toml"
+
+link_from_dotfiles \
+    "$DOTFILES/alacritty/alacritty.toml" \
+    "$HOME/.config/alacritty/alacritty.toml"
+
+# Neovim
+link_from_dotfiles \
+    "$DOTFILES/nvim" \
+    "$HOME/.config/nvim"
 
 # -------------------------------------------------------------------
-# User services
+# Local AI / Claude Code
 # -------------------------------------------------------------------
 
-log "Reloading user systemd"
+log "Installing local AI and Claude Code configuration"
+
+link_from_dotfiles \
+    "$DOTFILES/scripts/ai-start" \
+    "$HOME/.local/bin/ai-start"
+
+if [[ -f "$DOTFILES/scripts/ai-stop" ]]; then
+    link_from_dotfiles \
+        "$DOTFILES/scripts/ai-stop" \
+        "$HOME/.local/bin/ai-stop"
+fi
+
+link_from_dotfiles \
+    "$DOTFILES/scripts/claude-local" \
+    "$HOME/.local/bin/claude-local"
+
+link_from_dotfiles \
+    "$DOTFILES/claude/settings.json" \
+    "$HOME/.claude/settings.json"
+
+# -------------------------------------------------------------------
+# Fedora-specific scripts
+# -------------------------------------------------------------------
+
+log "Installing Fedora-specific scripts"
+
+link_from_dotfiles \
+    "$DOTFILES/scripts/dolby51-pipewire.sh" \
+    "$HOME/.local/bin/dolby51-pipewire.sh"
+
+# -------------------------------------------------------------------
+# User systemd service
+# -------------------------------------------------------------------
+
+log "Installing user systemd services"
+
+if [[ -f "$DOTFILES/systemd/user/dolby51.service" ]]; then
+    link_from_dotfiles \
+        "$DOTFILES/systemd/user/dolby51.service" \
+        "$HOME/.config/systemd/user/dolby51.service"
+fi
 
 systemctl --user daemon-reload
 
 if [[ -f "$HOME/.config/systemd/user/dolby51.service" ]]; then
     systemctl --user enable dolby51.service
+fi
+
+# -------------------------------------------------------------------
+# Validate local AI configuration
+# -------------------------------------------------------------------
+
+QWEN_TEMPLATE="$DOTFILES/llama/templates/qwen3.6-35b-a3b-claude-code.jinja"
+
+if [[ ! -f "$QWEN_TEMPLATE" ]]; then
+    echo "Missing Qwen Claude Code chat template:"
+    echo "  $QWEN_TEMPLATE"
+    exit 1
+fi
+
+chmod +x \
+    "$DOTFILES/scripts/ai-start" \
+    "$DOTFILES/scripts/claude-local"
+
+if [[ -f "$DOTFILES/scripts/ai-stop" ]]; then
+    chmod +x "$DOTFILES/scripts/ai-stop"
 fi
 
 # -------------------------------------------------------------------
@@ -367,29 +506,78 @@ zoxide --version
 printf "Podman:     "
 podman --version
 
+printf "Claude:     "
+claude --version
+
 printf "llama.cpp:  "
-"$HOME/.local/bin/llama-cli" --version 2>/dev/null || true
+llama-cli --version 2>/dev/null || true
 
 echo
 echo "Vulkan devices:"
-"$HOME/.local/bin/llama-cli" --list-devices 2>/dev/null || true
+llama-cli --list-devices 2>/dev/null || true
+
+echo
+echo "OpenCL devices:"
+if command -v clinfo >/dev/null 2>&1; then
+    clinfo -l 2>/dev/null || true
+else
+    echo "clinfo not available"
+fi
+
+echo
+echo "Dotfile links:"
+echo "-------------"
+
+for target in \
+    "$HOME/.zshrc" \
+    "$HOME/.tmux.conf" \
+    "$HOME/.config/starship.toml" \
+    "$HOME/.config/alacritty/alacritty.toml" \
+    "$HOME/.config/nvim" \
+    "$HOME/.claude/settings.json" \
+    "$HOME/.local/bin/ai-start" \
+    "$HOME/.local/bin/claude-local"; do
+    if [[ -L "$target" ]]; then
+        printf "OK  %-40s -> %s\n" \
+            "$target" \
+            "$(readlink "$target")"
+    else
+        printf "BAD %-40s\n" "$target"
+    fi
+done
+
+echo
+echo "Qwen Claude Code template:"
+echo "--------------------------"
+echo "  $QWEN_TEMPLATE"
 
 echo
 echo "=============================================="
 echo "Bootstrap completed successfully."
 echo "=============================================="
 echo
+
 echo "Next steps:"
 echo
 echo "  1. Log out/in so the new default shell is active."
 echo "  2. Start a new terminal."
 echo "  3. Verify:"
-echo "       echo \$SHELL"
+echo "       claude --version"
 echo "       llama-cli --list-devices"
+echo "       clinfo -l"
 echo "       nvim --version"
 echo "       podman --version"
 echo
-echo "LLM models are intentionally NOT downloaded."
-echo "Place them under:"
+echo "  4. Start local AI:"
+echo "       ai-start"
+echo
+echo "  5. Test local Claude Code:"
+echo "       claude-local -p 'Reply with exactly: LOCAL QWEN OK'"
+echo
+echo "Models are intentionally not downloaded."
+echo "Place GGUF models under:"
 echo "  $HOME/AI/models"
+echo
+echo "DaVinci Resolve is intentionally not installed by this script."
+echo "Install Resolve separately."
 echo
