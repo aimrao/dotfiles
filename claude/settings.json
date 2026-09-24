@@ -9,5 +9,8 @@
       }
     ]
   },
-  "theme": "dark"
+  "theme": "dark",
+  "env": {
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0"
+  }
 }

@@ -42,14 +42,16 @@ if ! pgrep -f "llama-server.*--models-dir" >/dev/null; then
     nohup "$LLAMA_SERVER" \
         --models-dir "$MODELS_DIR" \
         --models-max 1 \
+        --parallel 1 \
         --host 0.0.0.0 \
         --port "$LLAMA_PORT" \
         -ngl auto \
+        --flash-attn on \
         -ctk q4_0 \
         -ctv q4_0 \
         --load-mode none \
         -ub 2048 \
-        -c 32768 \
+        -c 65536 \
         --metrics \
         --jinja \
         --chat-template-file "$DOTFILES/llama/templates/qwen3.6-35b-a3b-claude-code.jinja" \
